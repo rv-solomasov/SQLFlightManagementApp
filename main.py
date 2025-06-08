@@ -128,7 +128,7 @@ class DBOperations:
                         target_table=table_name,
                         attrs=dict(zip(header, fields)),
                     )
-                    self.insert_data(data)
+                    self._insert_data(data)
             logging.info("Succesfully populated table {table}".format(table=table_name))
         except Exception as e:
             logging.error(e)
@@ -158,7 +158,7 @@ class DBOperations:
                 logging.error(f"Failed to get columns for {table_name}: {e}")
                 return []
 
-    def insert_data(self, data: DataClass):
+    def _insert_data(self, data: DataClass):
         with self.get_connection() as conn:
             try:
                 cursor = conn.cursor()
@@ -179,6 +179,35 @@ class DBOperations:
             except Exception as e:
                 logging.error(e)
 
+    def insert_data(self, table_name: str):
+        columns = self.get_table_columns(table_name)
+        if not columns:
+            print(f"Table {table_name} does not exist or has no columns.")
+            return
+        attrs = {}
+        print(
+            "Enter values for the following fields (leave blank to skip, `EXIT` to cancel):"
+        )
+        for col in columns:
+            if col == "id":
+                continue  # skip autoincrement id
+            value = input(f"{col}: ")
+            if value.strip().upper() == "EXIT":
+                print("Insert cancelled.")
+                return
+            if value.strip() == "":
+                continue
+            attrs[col] = atoi(value)
+        if not attrs:
+            print("No data entered.")
+            return
+        data = DataClass(target_table=table_name, attrs=attrs)
+        self._insert_data(data)
+        self.search_data(
+            table_name=table_name,
+            id="(SELECT MAX(id) FROM {table})".format(table=table_name),
+        )
+
     def select_all(self, table_name: str):
         return self.search_data(table_name=table_name, show_all=True)
 
@@ -190,12 +219,16 @@ class DBOperations:
         if input("Are you sure?(y/n): ") == "y":
             os.remove(os.path.join(self.current_dir, test.dbname))
 
-    def search_data(self, table_name: str, show_all: bool = False):
+    def search_data(self, table_name: str, show_all: bool = False, id: int = None):
         with self.get_connection() as conn:
             try:
                 cursor = conn.cursor()
                 if show_all:
                     query = self.sql_search.format(table=table_name, condition="True")
+                elif id is not None:
+                    query = self.sql_search.format(
+                        table=table_name, condition="id = {id}".format(id=id)
+                    )
                 else:
                     columns = self.get_table_columns(table_name=table_name)
                     filter_by = dict(zip(range(1, len(columns) + 1), columns))
@@ -221,7 +254,7 @@ class DBOperations:
                 logging.error(e)
 
     def update_data(self, table_name: str):
-        exit = False
+        exit, success = [False, False]
         with self.get_connection() as conn:
             try:
                 cursor = conn.cursor()
@@ -255,6 +288,9 @@ class DBOperations:
                     cursor.execute(query, (new_value, record_id))
                     conn.commit()
                     exit = True
+                    success = True
+                if success:
+                    self.search_data(table_name=table_name, id=record_id)
             except Exception as e:
                 logging.error(e)
 
@@ -272,7 +308,7 @@ class DBOperations:
                 cursor.execute(query, (record_id,))
                 conn.commit()
                 if cursor.rowcount != 0:
-                    print(f"{cursor.rowcount} row(s) affected.")
+                    print(f"Succesfully deleted from table {table_name}")
                 else:
                     print("Cannot find this record in the database")
             except Exception as e:
@@ -280,20 +316,19 @@ class DBOperations:
                 print(e)
 
 
-# The main function will parse arguments.
-# These argument will be definded by the users on the console.
-# The user will select a choice from the menu to interact with the database.
+# def main():
+#     name = input("Enter DB name: ")
+#     db = DBOperations(name=name)
+#     while True:
+#         print("\n Menu:")
+#         print("**********")
+#         print(" 2. Insert data into FlightInfo")
+#         print(" 3. Select all data from FlightInfo")
+#         print(" 4. Search a flight")
+#         print(" 5. Update data some records")
+#         print(" 6. Delete data some records")
+#         print(" 7. Exit\n")
 
-# while True:
-#     print("\n Menu:")
-#     print("**********")
-#     print(" 1. Create table FlightInfo")
-#     print(" 2. Insert data into FlightInfo")
-#     print(" 3. Select all data from FlightInfo")
-#     print(" 4. Search a flight")
-#     print(" 5. Update data some records")
-#     print(" 6. Delete data some records")
-#     print(" 7. Exit\n")
 
 #     __choose_menu = int(input("Enter your choice: "))
 #     db_ops = DBOperations()
@@ -318,6 +353,5 @@ if __name__ == "__main__":
     test = DBOperations(name="Testing")
     test.select_all("pilots")
     test.search_data("pilots")
-    test.update_data("pilots")
-    test.delete_data("pilots")
+    test.insert_data("pilots")
     test.teardown()
