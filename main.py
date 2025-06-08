@@ -89,11 +89,9 @@ class DBOperations:
                 self.initialize_tables()
             except Exception as e:
                 logging.error(e)
-            finally:
-                self.conn.close()
 
     def get_connection(self):
-        self.conn = sqlite3.connect(self.dbname)
+        return sqlite3.connect(self.dbname)
 
     def initialize_tables(self):
         for table in self.sql_create_base.keys():
@@ -101,18 +99,20 @@ class DBOperations:
             self.populate_table(table)
 
     def create_table(self, table_name: str):
-        try:
-            self.get_connection()
-            cursor = self.conn.cursor()
-            cursor.execute(self.sql_create_base[table_name.lower()])
-            self.conn.commit()
-            logging.info("Table {table} created successfully".format(table=table_name))
-        except KeyError:
-            logging.error("Cannot find DDL for table {table}".format(table=table_name))
-        except Exception as e:
-            logging.error(e)
-        finally:
-            self.conn.close()
+        with self.get_connection() as conn:
+            try:
+                cursor = conn.cursor()
+                cursor.execute(self.sql_create_base[table_name.lower()])
+                conn.commit()
+                logging.info(
+                    "Table {table} created successfully".format(table=table_name)
+                )
+            except KeyError:
+                logging.error(
+                    "Cannot find DDL for table {table}".format(table=table_name)
+                )
+            except Exception as e:
+                logging.error(e)
 
     def populate_table(self, table_name: str):
         try:
@@ -132,58 +132,52 @@ class DBOperations:
             logging.info("Succesfully populated table {table}".format(table=table_name))
         except Exception as e:
             logging.error(e)
-        finally:
-            self.conn.close()
 
     def drop_table(self, table_name: str):
-        try:
-            self.get_connection()
-            cursor = self.conn.cursor()
-            query = self.sql_drop.format(table=table_name.capitalize())
-            logging.debug(f"Running:\n{query}")
-            cursor.execute(query)
-            self.conn.commit()
-            logging.info("Table {table} dropped successfully".format(table=table_name))
-        except Exception as e:
-            logging.error(e)
-        finally:
-            self.conn.close()
+        with self.get_connection() as conn:
+            try:
+                cursor = conn.cursor()
+                query = self.sql_drop.format(table=table_name.capitalize())
+                logging.debug(f"Running:\n{query}")
+                cursor.execute(query)
+                conn.commit()
+                logging.info(
+                    "Table {table} dropped successfully".format(table=table_name)
+                )
+            except Exception as e:
+                logging.error(e)
 
     def get_table_columns(self, table_name: str):
-        try:
-            self.get_connection()
-            cursor = self.conn.cursor()
-            cursor.execute(f"PRAGMA table_info({table_name});")
-            columns_info = cursor.fetchall()
-            return [col[1] for col in columns_info]  # col[1] is the column name
-        except Exception as e:
-            logging.error(f"Failed to get columns for {table_name}: {e}")
-            return []
-        finally:
-            self.conn.close()
+        with self.get_connection() as conn:
+            try:
+                cursor = conn.cursor()
+                cursor.execute(f"PRAGMA table_info({table_name});")
+                columns_info = cursor.fetchall()
+                return [col[1] for col in columns_info]  # col[1] is the column name
+            except Exception as e:
+                logging.error(f"Failed to get columns for {table_name}: {e}")
+                return []
 
     def insert_data(self, data: DataClass):
-        try:
-            self.get_connection()
-            cursor = self.conn.cursor()
-            query = self.sql_insert.format(
-                table=data.target_table.capitalize(),
-                columns=",".join(data.get_columns()),
-                values=",".join(["?"] * len(data.get_columns())),
-            )
+        with self.get_connection() as conn:
+            try:
+                cursor = conn.cursor()
+                query = self.sql_insert.format(
+                    table=data.target_table.capitalize(),
+                    columns=",".join(data.get_columns()),
+                    values=",".join(["?"] * len(data.get_columns())),
+                )
 
-            logging.debug(f"Running:\n{query} with {data.get_values()}")
-            cursor.execute(
-                query,
-                data.get_values(),
-            )
+                logging.debug(f"Running:\n{query} with {data.get_values()}")
+                cursor.execute(
+                    query,
+                    data.get_values(),
+                )
 
-            self.conn.commit()
-            logging.info("Inserted row successfully")
-        except Exception as e:
-            logging.error(e)
-        finally:
-            self.conn.close()
+                conn.commit()
+                logging.info("Inserted row successfully")
+            except Exception as e:
+                logging.error(e)
 
     def select_all(self, table_name: str):
         return self.search_data(table_name=table_name, show_all=True)
@@ -195,79 +189,95 @@ class DBOperations:
     def teardown(self):
         if input("Are you sure?(y/n): ") == "y":
             os.remove(os.path.join(self.current_dir, test.dbname))
-            os.remove(
-                os.path.join(
-                    self.current_dir,
-                    "flight_management_{name}.log".format(
-                        name=test.dbname.capitalize().strip(".db")
-                    ),
-                )
-            )
 
     def search_data(self, table_name: str, show_all: bool = False):
-        try:
-            self.get_connection()
-            cursor = self.conn.cursor()
-            if show_all:
-                query = self.sql_search.format(table=table_name, condition="True")
-            else:
-                columns = self.get_table_columns(table_name=table_name)
-                filter_by = dict(zip(range(1, len(columns) + 1), columns))
-                choose_column = int(
-                    input(
-                        "Choose a column to filter by:\n"
-                        + "\n".join([f"{k}) {v}" for k, v in filter_by.items()])
-                        + "\n"
+        with self.get_connection() as conn:
+            try:
+                cursor = conn.cursor()
+                if show_all:
+                    query = self.sql_search.format(table=table_name, condition="True")
+                else:
+                    columns = self.get_table_columns(table_name=table_name)
+                    filter_by = dict(zip(range(1, len(columns) + 1), columns))
+                    choose_column = int(
+                        input(
+                            "Choose a column to filter by:\n"
+                            + "\n".join([f"{k}) {v}" for k, v in filter_by.items()])
+                            + "\n"
+                        )
                     )
-                )
-                filter_column = filter_by[choose_column]
-                value = atoi(input("Enter a value to filter by:\n"))
+                    filter_column = filter_by[choose_column]
+                    value = atoi(input("Enter a value to filter by:\n"))
 
-                query = self.sql_search.format(
-                    table=table_name, condition=f"{filter_column} = {value}"
-                )
+                    query = self.sql_search.format(
+                        table=table_name, condition=f"{filter_column} = {value}"
+                    )
 
-            logging.debug(f"Running:\n{query}")
-            cursor.execute(query)
-            data = cursor.fetchall()
-            return self.show(table_name, data)
+                logging.debug(f"Running:\n{query}")
+                cursor.execute(query)
+                data = cursor.fetchall()
+                return self.show(table_name, data)
+            except Exception as e:
+                logging.error(e)
 
-        except Exception as e:
-            logging.error(e)
-        finally:
-            self.conn.close()
+    def update_data(self, table_name: str):
+        exit = False
+        with self.get_connection() as conn:
+            try:
+                cursor = conn.cursor()
+                columns = self.get_table_columns(table_name)
+                if "id" not in columns:
+                    print("No 'id' column found in this table.")
+                    return
+                while not exit:
+                    print("Enter `EXIT` to quit at any time")
+                    record_id = atoi(input("Enter the id of the record to update:\n"))
+                    exit = record_id == "EXIT"
+                    filter_by = dict(zip(range(1, len(columns) + 1), columns))
+                    print("Choose a column to update:")
+                    for k, v in filter_by.items():
+                        if v != "id":
+                            print(f"{k}) {v}")
+                    choose_column = int(input())
+                    exit = choose_column == "EXIT"
+                    update_column = filter_by[choose_column]
+                    if update_column == "id":
+                        print("Cannot update the id column.")
+                        return
+                    new_value = input(f"Enter new value for {update_column}:\n")
+                    exit = new_value == "EXIT"
+                    query = self.sql_update.format(
+                        table=table_name, field=update_column, condition="id = ?"
+                    )
+                    logging.debug(
+                        f"Running:\n{query} with value {new_value} for id {record_id}"
+                    )
+                    cursor.execute(query, (new_value, record_id))
+                    conn.commit()
+                    exit = True
+            except Exception as e:
+                logging.error(e)
 
-    # def update_data(self):
-    #     try:
-    #         self.get_connection()
-
-    #         # Update statement
-
-    #         if result.rowcount != 0:
-    #             print(str(result.rowcount) + "Row(s) affected.")
-    #         else:
-    #             print("Cannot find this record in the database")
-
-    #     except Exception as e:
-    #         print(e)
-    #     finally:
-    #         self.conn.close()
-
-    # # Define Delete_data method to delete data from the table. The user will need to input the flight id to delete the corrosponding record.
-
-    # def delete_data(self):
-    #     try:
-    #         self.get_connection()
-
-    #         if result.rowcount != 0:
-    #             print(str(result.rowcount) + "Row(s) affected.")
-    #         else:
-    #             print("Cannot find this record in the database")
-
-    #     except Exception as e:
-    #         print(e)
-    #     finally:
-    #         self.conn.close()
+    def delete_data(self, table_name: str):
+        with self.get_connection() as conn:
+            try:
+                cursor = conn.cursor()
+                columns = self.get_table_columns(table_name)
+                if "id" not in columns:
+                    print("No 'id' column found in this table.")
+                    return
+                record_id = atoi(input("Enter the id of the record to delete:\n"))
+                query = self.sql_delete.format(table=table_name, condition="id = ?")
+                logging.debug(f"Running:\n{query} for id {record_id}")
+                cursor.execute(query, (record_id,))
+                conn.commit()
+                if cursor.rowcount != 0:
+                    print(f"{cursor.rowcount} row(s) affected.")
+                else:
+                    print("Cannot find this record in the database")
+            except Exception as e:
+                logging.error(e)
+                print(e)
 
 
 # The main function will parse arguments.
@@ -306,6 +316,8 @@ class DBOperations:
 
 if __name__ == "__main__":
     test = DBOperations(name="Testing")
-    test.initialize_tables()
     test.select_all("pilots")
     test.search_data("pilots")
+    test.update_data("pilots")
+    test.delete_data("pilots")
+    test.teardown()
