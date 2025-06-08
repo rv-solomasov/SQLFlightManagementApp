@@ -76,6 +76,7 @@ class DBOperations:
         self.sql_update = "UPDATE {table} SET {field} = ? WHERE {condition};"
         self.sql_delete = "DELETE FROM {table} WHERE {condition};"
         self.sql_drop = "DROP TABLE IF EXISTS {table};"
+        self.sql_group = "SELECT COUNT(*), {columns} FROM {table} GROUP BY {columns};"
 
         self.current_dir = os.path.dirname(os.path.abspath(__file__))
         self.dbname = name.capitalize() + ".db"
@@ -88,6 +89,7 @@ class DBOperations:
             try:
                 self.initialize_tables()
             except Exception as e:
+                print("Error, operation aborted")
                 logging.error(e)
 
     def get_connection(self):
@@ -108,6 +110,7 @@ class DBOperations:
             except KeyError:
                 logging.error(f"Cannot find DDL for table {table_name}")
             except Exception as e:
+                print("Error, operation aborted")
                 logging.error(e)
 
     def populate_table(self, table_name: str):
@@ -123,6 +126,7 @@ class DBOperations:
                     self._insert_data(data)
             logging.info(f"Successfully populated table {table_name}")
         except Exception as e:
+            print("Error, operation aborted")
             logging.error(e)
 
     def drop_table(self, table_name: str):
@@ -135,6 +139,7 @@ class DBOperations:
                 conn.commit()
                 logging.info(f"Table {table_name} dropped successfully")
             except Exception as e:
+                print("Error, operation aborted")
                 logging.error(e)
 
     def get_table_columns(self, table_name: str):
@@ -144,6 +149,7 @@ class DBOperations:
                 cursor.execute(f"PRAGMA table_info({table_name});")
                 return [col[1] for col in cursor.fetchall()]
             except Exception as e:
+                print("Error, operation aborted")
                 logging.error(f"Failed to get columns for {table_name}: {e}")
                 return []
 
@@ -161,6 +167,7 @@ class DBOperations:
                 conn.commit()
                 logging.info("Inserted row successfully")
             except Exception as e:
+                print("Error, operation aborted")
                 logging.error(e)
 
     def insert_data(self, table_name: str):
@@ -225,6 +232,7 @@ class DBOperations:
                 data = cursor.fetchall()
                 return self.show(table_name, data)
             except Exception as e:
+                print("Error, operation aborted")
                 logging.error(e)
 
     def update_data(self, table_name: str):
@@ -265,6 +273,7 @@ class DBOperations:
                 print("Record updated successfully.")
                 self.search_data(table_name, id=record_id)
             except Exception as e:
+                print("Error, operation aborted")
                 logging.error(e)
 
     def delete_data(self, table_name: str):
@@ -289,8 +298,55 @@ class DBOperations:
                 else:
                     print("Record not found.")
             except Exception as e:
+                print("Error, operation aborted")
                 logging.error(e)
                 print(e)
+
+    def group_data(self, table_name: str):
+        columns = self.get_table_columns(table_name)
+        if not columns:
+            print(f"Table '{table_name}' does not exist or has no columns.")
+            return
+
+        filter_by = {i: col for i, col in enumerate(columns, 1) if col != "id"}
+        if not filter_by:
+            print("No groupable columns found.")
+            return
+
+        print("Choose a column to group by (or type 'EXIT' to cancel):")
+        for k, v in filter_by.items():
+            print(f"{k}) {v}")
+
+        choice = input("Enter choice: ").strip()
+        if choice.upper() == "EXIT":
+            print("Group by operation cancelled.")
+            return
+
+        try:
+            choice = int(choice)
+            group_column = filter_by.get(choice)
+            if not group_column:
+                raise ValueError("Invalid column selection.")
+        except ValueError:
+            print("Invalid selection. Please enter a valid number.")
+            return
+
+        query = self.sql_group.format(columns=group_column, table=table_name)
+        with self.get_connection() as conn:
+            try:
+                cursor = conn.cursor()
+                logging.debug(f"Running:\n{query}")
+                cursor.execute(query)
+                data = cursor.fetchall()
+                if data:
+                    print(
+                        tabulate(data, headers=["count", group_column], tablefmt="grid")
+                    )
+                else:
+                    print("No data found for grouping.")
+            except Exception as e:
+                print("Error, operation aborted")
+                logging.error(f"Failed to group by {group_column}: {e}")
 
     def select_all(self, table_name: str):
         return self.search_data(table_name=table_name, show_all=True)
@@ -307,6 +363,5 @@ class DBOperations:
 if __name__ == "__main__":
     test = DBOperations(name="Testing")
     test.select_all("pilots")
-    test.search_data("pilots")
-    test.insert_data("pilots")
+    test.group_data("pilots")
     test.teardown()
