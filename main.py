@@ -80,7 +80,7 @@ class DBOperations:
         self.current_dir = os.path.dirname(os.path.abspath(__file__))
         self.dbname = name.capitalize() + ".db"
         logging.basicConfig(
-            filename="flight_management_{name}.log".format(name=name),
+            filename=f"flight_management_{name}.log",
             level=logging.DEBUG,
             format="%(asctime)s - %(levelname)s - %(message)s",
         )
@@ -104,32 +104,24 @@ class DBOperations:
                 cursor = conn.cursor()
                 cursor.execute(self.sql_create_base[table_name.lower()])
                 conn.commit()
-                logging.info(
-                    "Table {table} created successfully".format(table=table_name)
-                )
+                logging.info(f"Table {table_name} created successfully")
             except KeyError:
-                logging.error(
-                    "Cannot find DDL for table {table}".format(table=table_name)
-                )
+                logging.error(f"Cannot find DDL for table {table_name}")
             except Exception as e:
                 logging.error(e)
 
     def populate_table(self, table_name: str):
         try:
             file_path = os.path.join(
-                self.current_dir, "src", "{table}.csv".format(table=table_name.lower())
+                self.current_dir, "src", f"{table_name.lower()}.csv"
             )
-            header = []
             with open(file_path, "r") as f:
                 header = list(map(getattr(str, "lower"), f.readline().split(",")))
                 for line in f.readlines():
                     fields = [field.strip() for field in line.strip().split(",")]
-                    data = DataClass(
-                        target_table=table_name,
-                        attrs=dict(zip(header, fields)),
-                    )
+                    data = DataClass(table_name, dict(zip(header, fields)))
                     self._insert_data(data)
-            logging.info("Succesfully populated table {table}".format(table=table_name))
+            logging.info(f"Successfully populated table {table_name}")
         except Exception as e:
             logging.error(e)
 
@@ -141,9 +133,7 @@ class DBOperations:
                 logging.debug(f"Running:\n{query}")
                 cursor.execute(query)
                 conn.commit()
-                logging.info(
-                    "Table {table} dropped successfully".format(table=table_name)
-                )
+                logging.info(f"Table {table_name} dropped successfully")
             except Exception as e:
                 logging.error(e)
 
@@ -152,8 +142,7 @@ class DBOperations:
             try:
                 cursor = conn.cursor()
                 cursor.execute(f"PRAGMA table_info({table_name});")
-                columns_info = cursor.fetchall()
-                return [col[1] for col in columns_info]  # col[1] is the column name
+                return [col[1] for col in cursor.fetchall()]
             except Exception as e:
                 logging.error(f"Failed to get columns for {table_name}: {e}")
                 return []
@@ -167,13 +156,8 @@ class DBOperations:
                     columns=",".join(data.get_columns()),
                     values=",".join(["?"] * len(data.get_columns())),
                 )
-
                 logging.debug(f"Running:\n{query} with {data.get_values()}")
-                cursor.execute(
-                    query,
-                    data.get_values(),
-                )
-
+                cursor.execute(query, data.get_values())
                 conn.commit()
                 logging.info("Inserted row successfully")
             except Exception as e:
@@ -190,7 +174,7 @@ class DBOperations:
         )
         for col in columns:
             if col == "id":
-                continue  # skip autoincrement id
+                continue
             value = input(f"{col}: ")
             if value.strip().upper() == "EXIT":
                 print("Insert cancelled.")
@@ -204,20 +188,8 @@ class DBOperations:
         data = DataClass(target_table=table_name, attrs=attrs)
         self._insert_data(data)
         self.search_data(
-            table_name=table_name,
-            id="(SELECT MAX(id) FROM {table})".format(table=table_name),
+            table_name, id="(SELECT MAX(id) FROM {table})".format(table=table_name)
         )
-
-    def select_all(self, table_name: str):
-        return self.search_data(table_name=table_name, show_all=True)
-
-    def show(self, table_name: str, data: list[tuple]):
-        headers = self.get_table_columns(table_name)
-        print(tabulate(data, headers=headers, tablefmt="grid"))
-
-    def teardown(self):
-        if input("Are you sure?(y/n): ") == "y":
-            os.remove(os.path.join(self.current_dir, test.dbname))
 
     def search_data(self, table_name: str, show_all: bool = False, id: int = None):
         with self.get_connection() as conn:
@@ -227,25 +199,27 @@ class DBOperations:
                     query = self.sql_search.format(table=table_name, condition="True")
                 elif id is not None:
                     query = self.sql_search.format(
-                        table=table_name, condition="id = {id}".format(id=id)
+                        table=table_name, condition=f"id = {id}"
                     )
                 else:
-                    columns = self.get_table_columns(table_name=table_name)
+                    columns = self.get_table_columns(table_name)
                     filter_by = dict(zip(range(1, len(columns) + 1), columns))
-                    choose_column = int(
-                        input(
-                            "Choose a column to filter by:\n"
-                            + "\n".join([f"{k}) {v}" for k, v in filter_by.items()])
-                            + "\n"
-                        )
-                    )
-                    filter_column = filter_by[choose_column]
-                    value = atoi(input("Enter a value to filter by:\n"))
-
+                    print("Choose a column to filter by:")
+                    for k, v in filter_by.items():
+                        print(f"{k}) {v}")
+                    choose_column = input()
+                    if choose_column.strip().upper() == "EXIT":
+                        print("Search cancelled.")
+                        return
+                    filter_column = filter_by.get(int(choose_column))
+                    value = input("Enter a value to filter by:\n")
+                    if value.strip().upper() == "EXIT":
+                        print("Search cancelled.")
+                        return
+                    value = atoi(value)
                     query = self.sql_search.format(
                         table=table_name, condition=f"{filter_column} = {value}"
                     )
-
                 logging.debug(f"Running:\n{query}")
                 cursor.execute(query)
                 data = cursor.fetchall()
@@ -254,7 +228,6 @@ class DBOperations:
                 logging.error(e)
 
     def update_data(self, table_name: str):
-        exit, success = [False, False]
         with self.get_connection() as conn:
             try:
                 cursor = conn.cursor()
@@ -262,35 +235,35 @@ class DBOperations:
                 if "id" not in columns:
                     print("No 'id' column found in this table.")
                     return
-                while not exit:
-                    print("Enter `EXIT` to quit at any time")
-                    record_id = atoi(input("Enter the id of the record to update:\n"))
-                    exit = record_id == "EXIT"
-                    filter_by = dict(zip(range(1, len(columns) + 1), columns))
-                    print("Choose a column to update:")
-                    for k, v in filter_by.items():
-                        if v != "id":
-                            print(f"{k}) {v}")
-                    choose_column = int(input())
-                    exit = choose_column == "EXIT"
-                    update_column = filter_by[choose_column]
-                    if update_column == "id":
-                        print("Cannot update the id column.")
-                        return
-                    new_value = input(f"Enter new value for {update_column}:\n")
-                    exit = new_value == "EXIT"
-                    query = self.sql_update.format(
-                        table=table_name, field=update_column, condition="id = ?"
-                    )
-                    logging.debug(
-                        f"Running:\n{query} with value {new_value} for id {record_id}"
-                    )
-                    cursor.execute(query, (new_value, record_id))
-                    conn.commit()
-                    exit = True
-                    success = True
-                if success:
-                    self.search_data(table_name=table_name, id=record_id)
+                print("Enter `EXIT` to cancel.")
+                record_id = input("Enter the id of the record to update:\n")
+                if record_id.strip().upper() == "EXIT":
+                    print("Update cancelled.")
+                    return
+                record_id = atoi(record_id)
+                filter_by = {i: col for i, col in enumerate(columns, 1) if col != "id"}
+                print("Choose a column to update:")
+                for k, v in filter_by.items():
+                    print(f"{k}) {v}")
+                choose_column = input()
+                if choose_column.strip().upper() == "EXIT":
+                    print("Update cancelled.")
+                    return
+                update_column = filter_by[int(choose_column)]
+                new_value = input(f"Enter new value for {update_column}:\n")
+                if new_value.strip().upper() == "EXIT":
+                    print("Update cancelled.")
+                    return
+                query = self.sql_update.format(
+                    table=table_name, field=update_column, condition="id = ?"
+                )
+                logging.debug(
+                    f"Running:\n{query} with value {new_value} for id {record_id}"
+                )
+                cursor.execute(query, (new_value, record_id))
+                conn.commit()
+                print("Record updated successfully.")
+                self.search_data(table_name, id=record_id)
             except Exception as e:
                 logging.error(e)
 
@@ -302,52 +275,34 @@ class DBOperations:
                 if "id" not in columns:
                     print("No 'id' column found in this table.")
                     return
-                record_id = atoi(input("Enter the id of the record to delete:\n"))
+                record_id = input("Enter the id of the record to delete:\n")
+                if record_id.strip().upper() == "EXIT":
+                    print("Delete cancelled.")
+                    return
+                record_id = atoi(record_id)
                 query = self.sql_delete.format(table=table_name, condition="id = ?")
                 logging.debug(f"Running:\n{query} for id {record_id}")
                 cursor.execute(query, (record_id,))
                 conn.commit()
                 if cursor.rowcount != 0:
-                    print(f"Succesfully deleted from table {table_name}")
+                    print(f"Successfully deleted from table {table_name}")
                 else:
-                    print("Cannot find this record in the database")
+                    print("Record not found.")
             except Exception as e:
                 logging.error(e)
                 print(e)
 
+    def select_all(self, table_name: str):
+        return self.search_data(table_name=table_name, show_all=True)
 
-# def main():
-#     name = input("Enter DB name: ")
-#     db = DBOperations(name=name)
-#     while True:
-#         print("\n Menu:")
-#         print("**********")
-#         print(" 2. Insert data into FlightInfo")
-#         print(" 3. Select all data from FlightInfo")
-#         print(" 4. Search a flight")
-#         print(" 5. Update data some records")
-#         print(" 6. Delete data some records")
-#         print(" 7. Exit\n")
+    def show(self, table_name: str, data: list[tuple]):
+        headers = self.get_table_columns(table_name)
+        print(tabulate(data, headers=headers, tablefmt="grid"))
 
+    def teardown(self):
+        if input("Are you sure?(y/n): ") == "y":
+            os.remove(os.path.join(self.current_dir, self.dbname))
 
-#     __choose_menu = int(input("Enter your choice: "))
-#     db_ops = DBOperations()
-#     if __choose_menu == 1:
-#         db_ops.create_table()
-#     elif __choose_menu == 2:
-#         db_ops.insert_data()
-#     elif __choose_menu == 3:
-#         db_ops.select_all()
-#     elif __choose_menu == 4:
-#         db_ops.search_data()
-#     elif __choose_menu == 5:
-#         db_ops.update_data()
-#     elif __choose_menu == 6:
-#         db_ops.delete_data()
-#     elif __choose_menu == 7:
-#         exit(0)
-#     else:
-#         print("Invalid Choice")
 
 if __name__ == "__main__":
     test = DBOperations(name="Testing")
