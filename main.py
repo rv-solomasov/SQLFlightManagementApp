@@ -360,8 +360,92 @@ class DBOperations:
             os.remove(os.path.join(self.current_dir, self.dbname))
 
 
+class DBUI:
+    def __init__(self, driver: DBOperations):
+        self.driver = driver
+
+    def main_menu(self):
+        while True:
+            print("\nFlight Management System Menu")
+            print("1) Add a New Flight")
+            print("2) View Flights by Criteria")
+            print("3) Update Flight Information")
+            print("4) Assign Pilot to Flight")
+            print("5) View Pilot Schedule")
+            print("6) View/Update Destination Information")
+            print("7) Exit")
+            choice = input("Select an option: ").strip()
+            match choice:
+                case "1":
+                    self.add_new_flight()
+                case "2":
+                    self.view_flights_by_criteria()
+                case "3":
+                    self.update_flight_info()
+                case "4":
+                    self.assign_pilot_to_flight()
+                case "5":
+                    self.view_pilot_schedule()
+                case "6":
+                    self.view_update_destination()
+                case "7":
+                    print("Exiting...")
+                    break
+                case _:
+                    print("Invalid choice. Please try again.")
+
+    def add_new_flight(self):
+        print("\nAdd a New Flight")
+        self.driver.insert_data("flights")
+
+    def view_flights_by_criteria(self):
+        print("\nView Flights by Criteria")
+        self.driver.search_data("flights")
+
+    def update_flight_info(self):
+        print("\nUpdate Flight Information")
+        self.driver.update_data("flights")
+
+    def assign_pilot_to_flight(self):
+        print("\nAssign Pilot to Flight")
+        flight_id = input("Enter Flight ID: ")
+        pilot_id = input("Enter Pilot ID to assign: ")
+        with self.driver.get_connection() as conn:
+            try:
+                cursor = conn.cursor()
+                query = "UPDATE Flights SET pilot_id = ? WHERE id = ?;"
+                cursor.execute(query, (pilot_id, flight_id))
+                conn.commit()
+                print("Pilot assigned successfully.")
+            except Exception as e:
+                print("Error assigning pilot:", e)
+
+    def view_pilot_schedule(self):
+        print("\nView Pilot Schedule")
+        pilot_id = input("Enter Pilot ID: ")
+        with self.driver.get_connection() as conn:
+            try:
+                cursor = conn.cursor()
+                query = "SELECT * FROM Flights WHERE pilot_id = ?;"
+                cursor.execute(query, (pilot_id,))
+                data = cursor.fetchall()
+                self.driver.show("flights", data)
+            except Exception as e:
+                print("Error retrieving pilot schedule:", e)
+
+    def view_update_destination(self):
+        print("\nView/Update Destination Information")
+        print("1) View Destinations")
+        print("2) Update Destination")
+        sub_choice = input("Select an option: ").strip()
+        if sub_choice == "1":
+            self.driver.select_all("destinations")
+        elif sub_choice == "2":
+            self.driver.update_data("destinations")
+        else:
+            print("Invalid choice.")
+
+
 if __name__ == "__main__":
-    test = DBOperations(name="Testing")
-    test.select_all("pilots")
-    test.group_data("pilots")
-    test.teardown()
+    ui = DBUI(DBOperations(name=input("Enter project name: ")))
+    ui.main_menu()
