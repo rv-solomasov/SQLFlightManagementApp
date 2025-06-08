@@ -1,0 +1,16 @@
+id,city,country,airport_code
+1,New York,USA,JFK
+2,London,UK,LHR
+3,Paris,France,CDG
+4,Berlin,Germany,TXL
+5,Tokyo,Japan,HND
+6,Sydney,Australia,SYD
+7,Los Angeles,USA,LAX
+8,Chicago,USA,ORD
+9,Madrid,Spain,MAD
+10,Rome,Italy,FCO
+11,Amsterdam,Netherlands,AMS
+12,Beijing,China,PEK
+13,Dubai,UAE,DXB
+14,Singapore,Singapore,SIN
+15,Zurich,Switzerland,ZRH
