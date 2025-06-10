@@ -462,7 +462,7 @@ class DBOperations(SQLQueries):
         """
         try:
             if show_all:
-                query = self.sql_search.format(table=table_name, condition="1=1")
+                query = self.sql_search.format(table=table_name, condition="True")
                 data = self._execute_query(query)
             elif id is not None:
                 query = self.sql_search.format(table=table_name, condition=f"id = {id}")
@@ -587,7 +587,7 @@ class DBOperations(SQLQueries):
         if data is not None:
             self.show(data=data, headers=["count", group_column])
 
-    def flight_summary(self, group_by: str, condition: str = "1=1") -> None:
+    def flight_summary(self, group_by: str, condition: str = "True") -> None:
         """
         Generate flight summary grouped by specified criteria.
 
@@ -779,7 +779,7 @@ class DBUI:
 
         condition = (
             input("Enter optional WHERE clause (e.g. fl.status = 'on-time'): ").strip()
-            or "1=1"
+            or "True"
         )
         self.driver.flight_summary(group_by=group_by, condition=condition)
 
