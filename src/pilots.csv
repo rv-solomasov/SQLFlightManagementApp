@@ -1,16 +1,16 @@
-id,first_name,last_name,license_number,flight_hours
-1,John,Smith,LIC1001,1200
-2,Anna,Brown,LIC1002,950
-3,David,Wilson,LIC1003,2100
-4,Emily,Clark,LIC1004,1800
-5,Michael,Lee,LIC1005,1600
-6,Sophia,Walker,LIC1006,800
-7,James,Hall,LIC1007,2300
-8,Linda,Allen,LIC1008,1100
-9,Robert,Young,LIC1009,1400
-10,Patricia,Hernandez,LIC1010,1700
-11,William,King,LIC1011,2000
-12,Barbara,Wright,LIC1012,900
-13,Richard,Lopez,LIC1013,1500
-14,Elizabeth,Scott,LIC1014,1300
-15,Charles,Green,LIC1015,1000
+id,name,license_number,flight_hours
+1,John Smith,LIC1001,1200
+2,Anna Brown,LIC1002,950
+3,David Wilson,LIC1003,2100
+4,Emily Clark,LIC1004,1800
+5,Michael Lee,LIC1005,1600
+6,Sophia Walker,LIC1006,800
+7,James Hall,LIC1007,2300
+8,Linda Allen,LIC1008,1100
+9,Robert Young,LIC1009,1400
+10,Patricia Hernandez,LIC1010,1700
+11,William King,LIC1011,2000
+12,Barbara Wright,LIC1012,900
+13,Richard Lopez,LIC1013,1500
+14,Elizabeth Scott,LIC1014,1300
+15,Charles Green,LIC1015,1000
