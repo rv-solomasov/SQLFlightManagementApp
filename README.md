@@ -8,7 +8,7 @@ University of Bath MSc in CS Lab Sheet Assignment for Database and Cloud module
 
     ```sh
     git clone https://github.com/rv-solomasov/SQLFlightManagementApp.git
-    cd fm
+    cd SQLFlightManagementApp
     ```
 
 2. **Install dependencies** (Python 3.8+ recommended):
