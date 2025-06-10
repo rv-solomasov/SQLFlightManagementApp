@@ -34,14 +34,13 @@ def atoi(s: str):
     return int(s) if s.isdigit() else s
 
 
-class DBOperations:
-    def __init__(self, name: str):
+class SQLQueries:
+    def __init__(self):
         self.sql_create_base = {
             "pilots": """
                 CREATE TABLE IF NOT EXISTS Pilots (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    first_name TEXT NOT NULL,
-                    last_name TEXT NOT NULL,
+                    name TEXT NOT NULL,
                     license_number TEXT UNIQUE NOT NULL,
                     flight_hours INTEGER NOT NULL CHECK (flight_hours >= 0)
                 );
@@ -78,6 +77,22 @@ class DBOperations:
         self.sql_drop = "DROP TABLE IF EXISTS {table};"
         self.sql_group = "SELECT COUNT(*), {columns} FROM {table} GROUP BY {columns};"
 
+        self.sql_flight_count = """
+            SELECT 
+                a.{group_column}, 
+                COUNT(fl.id) 
+            FROM 
+                {table_a} a 
+                LEFT JOIN Flights fl 
+                ON a.id = fl.{a_id} 
+            WHERE {condition}
+            GROUP BY a.{group_column};
+        """
+
+
+class DBOperations(SQLQueries):
+    def __init__(self, name: str):
+        super().__init__()
         self.current_dir = os.path.dirname(os.path.abspath(__file__))
         self.dbname = name.capitalize() + ".db"
         logging.basicConfig(
@@ -230,7 +245,7 @@ class DBOperations:
                 logging.debug(f"Running:\n{query}")
                 cursor.execute(query)
                 data = cursor.fetchall()
-                return self.show(table_name, data)
+                return self.show(table_name=table_name, data=data)
             except Exception as e:
                 print("Error, operation aborted")
                 logging.error(e)
@@ -338,21 +353,58 @@ class DBOperations:
                 logging.debug(f"Running:\n{query}")
                 cursor.execute(query)
                 data = cursor.fetchall()
-                if data:
-                    print(
-                        tabulate(data, headers=["count", group_column], tablefmt="grid")
-                    )
-                else:
-                    print("No data found for grouping.")
+                self.show(data=data, headers=["count", group_column])
             except Exception as e:
                 print("Error, operation aborted")
                 logging.error(f"Failed to group by {group_column}: {e}")
 
+    def flight_summary(self, group_by: str, condition: str = "1=1"):
+        if group_by == "Pilot":
+            table_a = "Pilots"
+            a_id = "pilot_id"
+            group_column = "name"
+        elif group_by == "Source":
+            table_a = "Destinations"
+            a_id = "source_id"
+            group_column = "airport_code"
+        elif group_by == "Destination":
+            table_a = "Destinations"
+            a_id = "destination_id"
+            group_column = "airport_code"
+        else:
+            print(f"Grouping by '{group_by}' is not supported.")
+            return
+
+        query = self.sql_flight_count.format(
+            group_column=group_column, table_a=table_a, a_id=a_id, condition=condition
+        )
+
+        with self.get_connection() as conn:
+            try:
+                cursor = conn.cursor()
+                logging.debug(f"Running:\n{query}")
+                cursor.execute(query)
+                data = cursor.fetchall()
+                if data:
+                    self.show(headers=[group_column, "NumFlights"], data=data)
+                else:
+                    print("No summary data found.")
+            except Exception as e:
+                print("Error, operation aborted")
+                logging.error(f"Failed to get flight summary: {e}")
+                print(e)
+
     def select_all(self, table_name: str):
         return self.search_data(table_name=table_name, show_all=True)
 
-    def show(self, table_name: str, data: list[tuple]):
-        headers = self.get_table_columns(table_name)
+    def show(self, data: list[tuple], headers: list = None, table_name: str = None):
+        if not headers:
+            if table_name:
+                headers = self.get_table_columns(table_name)
+            else:
+                logging.error("Error. No headers or table provided for lookup")
+                print("Error visualizing your data")
+                return
         print(tabulate(data, headers=headers, tablefmt="grid"))
 
     def teardown(self):
@@ -367,83 +419,62 @@ class DBUI:
     def main_menu(self):
         while True:
             print("\nFlight Management System Menu")
-            print("1) Add a New Flight")
-            print("2) View Flights by Criteria")
-            print("3) Update Flight Information")
-            print("4) Assign Pilot to Flight")
-            print("5) View Pilot Schedule")
-            print("6) View/Update Destination Information")
-            print("7) Exit")
+            print("1) Flights")
+            print("2) Pilots")
+            print("3) Destinations")
+            print("4) Flight Summary")
+            print("5) Exit")
             choice = input("Select an option: ").strip()
+            entites = {"1": "flights", "2": "pilots", "3": "destinations"}
             match choice:
-                case "1":
-                    self.add_new_flight()
-                case "2":
-                    self.view_flights_by_criteria()
-                case "3":
-                    self.update_flight_info()
+                case "1" | "2" | "3":
+                    self.sub_menu(entity=entites[choice])
                 case "4":
-                    self.assign_pilot_to_flight()
+                    self.flight_summary()
                 case "5":
-                    self.view_pilot_schedule()
-                case "6":
-                    self.view_update_destination()
-                case "7":
                     print("Exiting...")
                     break
                 case _:
                     print("Invalid choice. Please try again.")
 
-    def add_new_flight(self):
-        print("\nAdd a New Flight")
-        self.driver.insert_data("flights")
+    def sub_menu(self, entity: str):
+        print(f"\n{entity.capitalize()} Menu")
+        print(f"1) Add New {entity.capitalize()}")
+        print(f"2) View {entity.capitalize()}")
+        print(f"3) Search {entity.capitalize()}")
+        print(f"4) Update {entity.capitalize()} Info")
+        choice = input("Select an option: ").strip()
+        match choice:
+            case "1":
+                self.driver.insert_data(entity)
+            case "2":
+                self.driver.search_data(entity, show_all=True)
+            case "3":
+                self.driver.search_data(entity)
+            case "4":
+                self.driver.update_data(entity)
+            case _:
+                print("Invalid choice.")
 
-    def view_flights_by_criteria(self):
-        print("\nView Flights by Criteria")
-        self.driver.search_data("flights")
-
-    def update_flight_info(self):
-        print("\nUpdate Flight Information")
-        self.driver.update_data("flights")
-
-    def assign_pilot_to_flight(self):
-        print("\nAssign Pilot to Flight")
-        flight_id = input("Enter Flight ID: ")
-        pilot_id = input("Enter Pilot ID to assign: ")
-        with self.driver.get_connection() as conn:
-            try:
-                cursor = conn.cursor()
-                query = "UPDATE Flights SET pilot_id = ? WHERE id = ?;"
-                cursor.execute(query, (pilot_id, flight_id))
-                conn.commit()
-                print("Pilot assigned successfully.")
-            except Exception as e:
-                print("Error assigning pilot:", e)
-
-    def view_pilot_schedule(self):
-        print("\nView Pilot Schedule")
-        pilot_id = input("Enter Pilot ID: ")
-        with self.driver.get_connection() as conn:
-            try:
-                cursor = conn.cursor()
-                query = "SELECT * FROM Flights WHERE pilot_id = ?;"
-                cursor.execute(query, (pilot_id,))
-                data = cursor.fetchall()
-                self.driver.show("flights", data)
-            except Exception as e:
-                print("Error retrieving pilot schedule:", e)
-
-    def view_update_destination(self):
-        print("\nView/Update Destination Information")
-        print("1) View Destinations")
-        print("2) Update Destination")
-        sub_choice = input("Select an option: ").strip()
-        if sub_choice == "1":
-            self.driver.select_all("destinations")
-        elif sub_choice == "2":
-            self.driver.update_data("destinations")
-        else:
-            print("Invalid choice.")
+    def flight_summary(self):
+        print("\nFlight Summary")
+        print("1) By Pilot")
+        print("2) By Source")
+        print("3) By Destination")
+        group_map = {"1": "Pilot", "2": "Source", "3": "Destination"}
+        choice = input("Enter choice (or 'EXIT' to cancel): ").strip()
+        if choice.upper() == "EXIT":
+            print("Cancelled.")
+            return
+        group_by = group_map.get(choice)
+        if not group_by:
+            print("Invalid selection.")
+            return
+        condition = (
+            input("Enter optional WHERE clause (e.g. fl.status = 'on-time'): ").strip()
+            or "True"
+        )
+        self.driver.flight_summary(group_by=group_by, condition=condition)
 
 
 if __name__ == "__main__":
