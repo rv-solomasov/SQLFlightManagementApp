@@ -479,7 +479,8 @@ class DBOperations(SQLQueries):
 
                 value = atoi(value)
                 query = self.sql_search.format(
-                    table=table_name, condition=f"{filter_column} = {value}"
+                    table=table_name,
+                    condition=f"{filter_column} = {value if isinstance(atoi(value), int) else repr(value)}",
                 )
                 data = self._execute_query(query)
 
