@@ -89,6 +89,19 @@ class SQLQueries:
             GROUP BY a.{group_column};
         """
 
+        self._custom_pilot_schedule = """
+            SELECT
+                p.name,
+                f.flight_number,
+                f.departure_time,
+                f.arrival_time
+            FROM 
+                Pilots p
+            LEFT JOIN Flights f
+                ON p.id = f.pilot_id
+            WHERE p.id = ?;
+        """
+
 
 class DBOperations(SQLQueries):
     def __init__(self, name: str):
@@ -423,7 +436,9 @@ class DBUI:
             print("2) Pilots")
             print("3) Destinations")
             print("4) Flight Summary")
-            print("5) Exit")
+            print("5) Custom Analysis")
+            print("6) Exit")
+
             choice = input("Select an option: ").strip()
             entites = {"1": "flights", "2": "pilots", "3": "destinations"}
             match choice:
@@ -432,6 +447,8 @@ class DBUI:
                 case "4":
                     self.flight_summary()
                 case "5":
+                    self.custom_analysis()
+                case "6":
                     print("Exiting...")
                     break
                 case _:
@@ -456,6 +473,19 @@ class DBUI:
             case _:
                 print("Invalid choice.")
 
+    def custom_analysis(self):
+        print("\nCustom Analysis Options")
+        print("1) Pilot Schedule")
+        print("2) Back to Main Menu")
+        choice = input("Enter your choice: ").strip()
+        match choice:
+            case "1":
+                self.pilot_schedule()
+            case "2":
+                return
+            case _:
+                print("Invalid option.")
+
     def flight_summary(self):
         print("\nFlight Summary")
         print("1) By Pilot")
@@ -475,6 +505,29 @@ class DBUI:
             or "True"
         )
         self.driver.flight_summary(group_by=group_by, condition=condition)
+
+    def pilot_schedule(self):
+        try:
+            pilot_id = int(input("Enter the pilot's ID: ").strip())
+        except ValueError:
+            print("Invalid ID format. Must be an integer.")
+            return
+
+        with self.driver.get_connection() as conn:
+            try:
+                cursor = conn.cursor()
+                cursor.execute(self.driver._custom_pilot_schedule, (pilot_id,))
+                data = cursor.fetchall()
+                if data:
+                    self.driver.show(
+                        data=data,
+                        headers=["Pilot Name", "Flight Number", "Departure", "Arrival"],
+                    )
+                else:
+                    print("No scheduled flights found for this pilot.")
+            except Exception as e:
+                print("Error executing custom analysis.")
+                logging.error(f"Pilot schedule query failed: {e}")
 
 
 if __name__ == "__main__":
