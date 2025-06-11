@@ -129,7 +129,7 @@ class SQLQueries:
                 COUNT(fl.id) 
             FROM 
                 {table_a} a 
-                LEFT JOIN Flights fl 
+            LEFT JOIN Flights fl 
                 ON a.id = fl.{a_id} 
             WHERE {condition}
             GROUP BY a.{group_column};
